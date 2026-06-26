@@ -43,12 +43,7 @@ include(GNUInstallDirs)
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
-# Unit tests (enabled by default, except in Release/MinSizeRel builds)
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-    option(BUILD_UNIT_TESTS "Build unit tests" OFF)
-else()
-    option(BUILD_UNIT_TESTS "Build unit tests" ON)
-endif()
+option(BUILD_UNIT_TESTS "Build unit tests" OFF)
 
 if(BUILD_UNIT_TESTS)
     add_subdirectory(${PROJECT_SOURCE_DIR}/autotests)
