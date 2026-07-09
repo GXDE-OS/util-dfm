@@ -55,33 +55,33 @@ bool KeywordExtractor::extractStructuredKeywords(const QString &input, ParsedInt
     const bool multiKeyword = metadata.value("multi_keyword", false).toBool();
 
     if (multiKeyword) {
-        intent.keywords = splitMultiKeywords(captured, metadata);
+        intent.setKeywords(splitMultiKeywords(captured, metadata));
     } else {
-        intent.keywords = { captured };
+        intent.setKeywords({ captured });
     }
 
     // Determine search target from rule metadata
     const QString targetStr = metadata.value("search_target").toString();
     if (targetStr == "filename") {
-        intent.searchTarget = SearchTarget::FileNameOnly;
+        intent.setSearchTarget(SearchTarget::FileNameOnly);
     } else if (targetStr == "content") {
-        intent.searchTarget = SearchTarget::ContentOnly;
+        intent.setSearchTarget(SearchTarget::ContentOnly);
     }
     // "all" or empty → keep default SearchTarget::All
 
     // Mark the entire matched region as consumed
     MatchSpan span;
-    span.start = match.capturedStart();
-    span.end = match.capturedEnd();
-    span.ruleId = ruleId;
-    intent.consumedSpans.append(span);
+    span.setStart(match.capturedStart());
+    span.setEnd(match.capturedEnd());
+    span.setRuleId(ruleId);
+    intent.consumedSpans().append(span);
 
     return true;
 }
 
 void KeywordExtractor::extractUnconsumedText(const QString &input, ParsedIntent &intent)
 {
-    QList<MatchSpan> allSpans = intent.consumedSpans;
+    QList<MatchSpan> allSpans = intent.consumedSpans();
 
     // Also consume noise words
     if (m_engine->hasGroup("noise")) {
@@ -91,9 +91,9 @@ void KeywordExtractor::extractUnconsumedText(const QString &input, ParsedIntent 
 
         for (int i = 0; i < noiseMatches.size(); ++i) {
             MatchSpan span;
-            span.start = noiseMatches[i].capturedStart();
-            span.end = noiseMatches[i].capturedEnd();
-            span.ruleId = noiseRuleIds[i];
+            span.setStart(noiseMatches[i].capturedStart());
+            span.setEnd(noiseMatches[i].capturedEnd());
+            span.setRuleId(noiseRuleIds[i]);
             allSpans.append(span);
         }
     }
@@ -133,7 +133,7 @@ void KeywordExtractor::extractUnconsumedText(const QString &input, ParsedIntent 
         return;
     }
 
-    intent.keywords = { cleaned };
+    intent.setKeywords({ cleaned });
 }
 
 QString KeywordExtractor::extractUnconsumedRegions(const QString &input, const QList<MatchSpan> &allSpans) const
@@ -145,8 +145,8 @@ QString KeywordExtractor::extractUnconsumedRegions(const QString &input, const Q
     // Build a set of consumed character positions
     QVector<bool> consumed(input.size(), false);
     for (const MatchSpan &span : allSpans) {
-        if (span.isValid() && span.end <= input.size()) {
-            for (int i = span.start; i < span.end; ++i) {
+        if (span.isValid() && span.end() <= input.size()) {
+            for (int i = span.start(); i < span.end(); ++i) {
                 consumed[i] = true;
             }
         }

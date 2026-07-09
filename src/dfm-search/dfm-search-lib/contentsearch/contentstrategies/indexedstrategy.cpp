@@ -4,7 +4,6 @@
 #include "indexedstrategy.h"
 
 #include <QDir>
-#include <QFileInfo>
 #include <QMimeDatabase>
 #include <QTextStream>
 #include <QThread>
@@ -165,6 +164,18 @@ Lucene::QueryPtr ContentIndexedStrategy::buildLuceneQuery(const SearchQuery &que
             mainQuery = finalQuery;
         }
 
+        // When hiddenOnly is true, only return hidden files (MUST kIsHidden:Y)
+        if (mainQuery && m_options.hiddenOnly()) {
+            QueryPtr hiddenOnlyQuery = Lucene::newLucene<Lucene::TermQuery>(
+                    Lucene::newLucene<Lucene::Term>(
+                            LuceneFieldNames::Content::kIsHidden,
+                            L"Y"));
+            BooleanQueryPtr finalQuery = newLucene<BooleanQuery>();
+            finalQuery->add(mainQuery, BooleanClause::MUST);
+            finalQuery->add(hiddenOnlyQuery, BooleanClause::MUST);
+            mainQuery = finalQuery;
+        }
+
         // Add time range filter query
         if (m_options.hasTimeRangeFilter()) {
             TimeRangeFilter filter = m_options.timeRangeFilter();
@@ -204,6 +215,27 @@ Lucene::QueryPtr ContentIndexedStrategy::buildLuceneQuery(const SearchQuery &que
                     // Size filter alone is a valid query
                     mainQuery = sizeQuery;
                 }
+            }
+        }
+
+        // Add file extension filter query (pushed down to index query layer)
+        {
+            const QStringList fileExtensions = optAPI.fileExtensions();
+            if (!fileExtensions.isEmpty() && mainQuery) {
+                Lucene::BooleanQueryPtr extQuery = newLucene<BooleanQuery>();
+                for (const QString &ext : fileExtensions) {
+                    extQuery->add(
+                            Lucene::newLucene<Lucene::TermQuery>(
+                                    Lucene::newLucene<Lucene::Term>(
+                                            LuceneFieldNames::Content::kFileExt,
+                                            ext.toStdWString())),
+                            Lucene::BooleanClause::SHOULD);
+                }
+                extQuery->setMinimumNumberShouldMatch(1);
+                BooleanQueryPtr finalQuery = newLucene<BooleanQuery>();
+                finalQuery->add(mainQuery, BooleanClause::MUST);
+                finalQuery->add(extQuery, BooleanClause::MUST);
+                mainQuery = finalQuery;
             }
         }
 

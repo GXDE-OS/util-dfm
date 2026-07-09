@@ -8,6 +8,8 @@
 #include <QJsonArray>
 #include <QDateTime>
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 
 #include <dfm-search/semanticsearcher.h>
 
@@ -16,6 +18,7 @@
 #include "semantic/ruleconfigloader.h"
 #include "semantic/extractors/keywordextractor.h"
 #include "semantic/semanticquerybuilder.h"
+#include "semantic/extractors/locationextractor.h"
 
 using namespace DFMSEARCH;
 
@@ -50,10 +53,10 @@ static QByteArray makeRuleJson(const QString &groupName, const QString &ruleId,
     QJsonObject ruleGroupObj;
     ruleGroupObj["name"] = groupName;
     ruleGroupObj["version"] = "1.0.0";
-    ruleGroupObj["rules"] = QJsonArray({ruleObj});
+    ruleGroupObj["rules"] = QJsonArray({ ruleObj });
 
     QJsonObject root;
-    root["groups"] = QJsonArray({ruleGroupObj});
+    root["groups"] = QJsonArray({ ruleGroupObj });
 
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
@@ -97,17 +100,23 @@ void tst_RuleEngine::parseEmptyGroup()
 void tst_RuleEngine::parsePriorityOrdering()
 {
     QJsonObject r1, r2, r3;
-    r1["id"] = "low";  r1["pattern"] = "test"; r1["priority"] = 10;
-    r2["id"] = "high"; r2["pattern"] = "test"; r2["priority"] = 200;
-    r3["id"] = "mid";  r3["pattern"] = "test"; r3["priority"] = 100;
+    r1["id"] = "low";
+    r1["pattern"] = "test";
+    r1["priority"] = 10;
+    r2["id"] = "high";
+    r2["pattern"] = "test";
+    r2["priority"] = 200;
+    r3["id"] = "mid";
+    r3["pattern"] = "test";
+    r3["priority"] = 100;
 
     QJsonObject ruleGroup;
     ruleGroup["name"] = "prio";
     ruleGroup["version"] = "1.0.0";
-    ruleGroup["rules"] = QJsonArray({r1, r2, r3});
+    ruleGroup["rules"] = QJsonArray({ r1, r2, r3 });
 
     QJsonObject root;
-    root["groups"] = QJsonArray({ruleGroup});
+    root["groups"] = QJsonArray({ ruleGroup });
 
     RuleGroup group;
     QVERIFY(SemanticRuleEngine::parseRuleGroupStatic(ruleGroup, group));
@@ -125,7 +134,7 @@ void tst_RuleEngine::parsePriorityOrdering()
 void tst_RuleEngine::matchReturnsHighestPriority()
 {
     QByteArray json = makeRuleJson("test_match", "r1", "abc", 200,
-                                   {{"level", "high"}});
+                                   { { "level", "high" } });
 
     RuleGroup group;
     QVERIFY(buildGroupFromJson(json, group));
@@ -135,17 +144,23 @@ void tst_RuleEngine::matchReturnsHighestPriority()
 void tst_RuleEngine::matchAllReturnsAll()
 {
     QJsonObject r1, r2, r3;
-    r1["id"] = "r1"; r1["pattern"] = "cat"; r1["priority"] = 100;
-    r2["id"] = "r2"; r2["pattern"] = "dog"; r2["priority"] = 100;
-    r3["id"] = "r3"; r3["pattern"] = "bird"; r3["priority"] = 50;
+    r1["id"] = "r1";
+    r1["pattern"] = "cat";
+    r1["priority"] = 100;
+    r2["id"] = "r2";
+    r2["pattern"] = "dog";
+    r2["priority"] = 100;
+    r3["id"] = "r3";
+    r3["pattern"] = "bird";
+    r3["priority"] = 50;
 
     QJsonObject ruleGroup;
     ruleGroup["name"] = "test_all";
     ruleGroup["version"] = "1.0.0";
-    ruleGroup["rules"] = QJsonArray({r1, r2, r3});
+    ruleGroup["rules"] = QJsonArray({ r1, r2, r3 });
 
     QJsonObject root;
-    root["groups"] = QJsonArray({ruleGroup});
+    root["groups"] = QJsonArray({ ruleGroup });
 
     RuleGroup group;
     QVERIFY(SemanticRuleEngine::parseRuleGroupStatic(ruleGroup, group));
@@ -358,20 +373,20 @@ private Q_SLOTS:
 void tst_FileTypeExtraction::precisePdf()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"pdf"});
+    meta["extensions"] = QStringList({ "pdf" });
     QByteArray json = makeRuleJson("filetype", "filetype_pdf", "pdf", 200, meta);
 
     RuleGroup group;
     QVERIFY(buildGroupFromJson(json, group));
     QVERIFY(group.rules[0].regex.match("pdf").hasMatch());
-    QCOMPARE(group.rules[0].metadata.value("extensions").toStringList(), QStringList({"pdf"}));
+    QCOMPARE(group.rules[0].metadata.value("extensions").toStringList(), QStringList({ "pdf" }));
 }
 
 void tst_FileTypeExtraction::preciseWord()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"doc", "docx"});
-    meta["fileTypes"] = QStringList({"doc"});
+    meta["extensions"] = QStringList({ "doc", "docx" });
+    meta["fileTypes"] = QStringList({ "doc" });
     QByteArray json = makeRuleJson("filetype", "filetype_word", "word|doc|docx", 200, meta);
 
     RuleGroup group;
@@ -384,7 +399,7 @@ void tst_FileTypeExtraction::preciseWord()
 void tst_FileTypeExtraction::preciseExcel()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"xls", "xlsx"});
+    meta["extensions"] = QStringList({ "xls", "xlsx" });
     QByteArray json = makeRuleJson("filetype", "filetype_excel", "excel|xls|xlsx", 200, meta);
 
     RuleGroup group;
@@ -396,7 +411,7 @@ void tst_FileTypeExtraction::preciseExcel()
 void tst_FileTypeExtraction::precisePpt()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"ppt", "pptx"});
+    meta["extensions"] = QStringList({ "ppt", "pptx" });
     QByteArray json = makeRuleJson("filetype", "filetype_ppt", "ppt|pptx", 200, meta);
 
     RuleGroup group;
@@ -408,44 +423,44 @@ void tst_FileTypeExtraction::precisePpt()
 void tst_FileTypeExtraction::imageType()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"jpg", "png", "gif"});
-    meta["fileTypes"] = QStringList({"pic"});
+    meta["extensions"] = QStringList({ "jpg", "png", "gif" });
+    meta["fileTypes"] = QStringList({ "pic" });
     QByteArray json = makeRuleJson("filetype", "filetype_image", "image", 150, meta);
 
     RuleGroup group;
     QVERIFY(buildGroupFromJson(json, group));
-    QCOMPARE(group.rules[0].metadata.value("fileTypes").toStringList(), QStringList({"pic"}));
+    QCOMPARE(group.rules[0].metadata.value("fileTypes").toStringList(), QStringList({ "pic" }));
 }
 
 void tst_FileTypeExtraction::videoType()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"mp4", "avi", "mkv"});
-    meta["fileTypes"] = QStringList({"video"});
+    meta["extensions"] = QStringList({ "mp4", "avi", "mkv" });
+    meta["fileTypes"] = QStringList({ "video" });
     QByteArray json = makeRuleJson("filetype", "filetype_video", "video", 150, meta);
 
     RuleGroup group;
     QVERIFY(buildGroupFromJson(json, group));
-    QCOMPARE(group.rules[0].metadata.value("fileTypes").toStringList(), QStringList({"video"}));
+    QCOMPARE(group.rules[0].metadata.value("fileTypes").toStringList(), QStringList({ "video" }));
 }
 
 void tst_FileTypeExtraction::audioType()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"mp3", "wav", "flac"});
-    meta["fileTypes"] = QStringList({"audio"});
+    meta["extensions"] = QStringList({ "mp3", "wav", "flac" });
+    meta["fileTypes"] = QStringList({ "audio" });
     QByteArray json = makeRuleJson("filetype", "filetype_audio", "audio", 150, meta);
 
     RuleGroup group;
     QVERIFY(buildGroupFromJson(json, group));
-    QCOMPARE(group.rules[0].metadata.value("fileTypes").toStringList(), QStringList({"audio"}));
+    QCOMPARE(group.rules[0].metadata.value("fileTypes").toStringList(), QStringList({ "audio" }));
 }
 
 void tst_FileTypeExtraction::genericDocument()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"doc", "docx", "pdf", "txt"});
-    meta["fileTypes"] = QStringList({"doc"});
+    meta["extensions"] = QStringList({ "doc", "docx", "pdf", "txt" });
+    meta["fileTypes"] = QStringList({ "doc" });
     meta["general"] = true;
     QByteArray json = makeRuleJson("filetype", "filetype_document_general", "document", 100, meta);
 
@@ -458,7 +473,7 @@ void tst_FileTypeExtraction::genericDocument()
 void tst_FileTypeExtraction::genericSpreadsheet()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"xls", "xlsx", "csv"});
+    meta["extensions"] = QStringList({ "xls", "xlsx", "csv" });
     meta["general"] = true;
     QByteArray json = makeRuleJson("filetype", "filetype_spreadsheet_general", "spreadsheet", 100, meta);
 
@@ -470,7 +485,7 @@ void tst_FileTypeExtraction::genericSpreadsheet()
 void tst_FileTypeExtraction::genericPresentation()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"ppt", "pptx", "dps"});
+    meta["extensions"] = QStringList({ "ppt", "pptx", "dps" });
     meta["general"] = true;
     QByteArray json = makeRuleJson("filetype", "filetype_presentation_general", "presentation", 100, meta);
 
@@ -482,7 +497,7 @@ void tst_FileTypeExtraction::genericPresentation()
 void tst_FileTypeExtraction::archiveType()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"zip", "tar", "rar", "7z"});
+    meta["extensions"] = QStringList({ "zip", "tar", "rar", "7z" });
     QByteArray json = makeRuleJson("filetype", "filetype_archive", "archive", 150, meta);
 
     RuleGroup group;
@@ -493,7 +508,7 @@ void tst_FileTypeExtraction::archiveType()
 void tst_FileTypeExtraction::extensionsList()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"a", "b", "c", "d", "e"});
+    meta["extensions"] = QStringList({ "a", "b", "c", "d", "e" });
     QByteArray json = makeRuleJson("filetype", "ft", "test", 100, meta);
 
     RuleGroup group;
@@ -504,7 +519,7 @@ void tst_FileTypeExtraction::extensionsList()
 void tst_FileTypeExtraction::generalFlag()
 {
     QVariantMap meta;
-    meta["extensions"] = QStringList({"pdf"});
+    meta["extensions"] = QStringList({ "pdf" });
     QByteArray json = makeRuleJson("filetype", "ft_precise", "pdf", 200, meta);
 
     RuleGroup group;
@@ -627,24 +642,24 @@ private Q_SLOTS:
 void tst_ParsedIntent::defaultState()
 {
     ParsedIntent intent;
-    QVERIFY(intent.timeConstraint.kind == TimeConstraintKind::None);
-    QVERIFY(intent.fileExtensions.isEmpty());
-    QVERIFY(intent.keywords.isEmpty());
-    QVERIFY(intent.consumedSpans.isEmpty());
+    QVERIFY(intent.timeConstraint().kind() == TimeConstraintKind::None);
+    QVERIFY(intent.fileExtensions().isEmpty());
+    QVERIFY(intent.keywords().isEmpty());
+    QVERIFY(intent.consumedSpans().isEmpty());
 }
 
 void tst_ParsedIntent::timeConstraintDefault()
 {
     TimeConstraint tc;
     QVERIFY(!tc.isValid());
-    QCOMPARE(tc.kind, TimeConstraintKind::None);
+    QCOMPARE(tc.kind(), TimeConstraintKind::None);
 }
 
 void tst_ParsedIntent::timeConstraintPreset()
 {
     TimeConstraint tc;
-    tc.kind = TimeConstraintKind::Preset;
-    tc.preset = TimePreset::Today;
+    tc.setKind(TimeConstraintKind::Preset);
+    tc.setPreset(TimePreset::Today);
     QVERIFY(tc.isValid());
 }
 
@@ -653,9 +668,9 @@ void tst_ParsedIntent::matchSpanValidity()
     MatchSpan span;
     QVERIFY(!span.isValid());
 
-    span.start = 0;
-    span.end = 5;
-    span.ruleId = "test_rule";
+    span.setStart(0);
+    span.setEnd(5);
+    span.setRuleId("test_rule");
     QVERIFY(span.isValid());
 }
 
@@ -679,7 +694,7 @@ bool sourceRulesAvailable()
 {
     const QString dir = sourceRulesDir();
     return QDir(dir).exists()
-            && !QDir(dir).entryList({"*.json"}, QDir::Files).isEmpty();
+            && !QDir(dir).entryList({ "*.json" }, QDir::Files).isEmpty();
 }
 
 // Replicate isSemanticQuery() logic using internal components with source-tree rules.
@@ -693,10 +708,47 @@ bool checkIsSemanticQuery(SemanticRuleEngine *engine, IntentParser *parser,
     ParsedIntent intent;
     parser->parse(input, intent);
 
-    return intent.timeConstraint.isValid()
-            || intent.sizeConstraint.isValid()
-            || !intent.fileExtensions.isEmpty()
-            || !intent.searchDirectories.isEmpty();
+    // Replicate isSemanticIntent() — keep in sync with semanticsearcher.cpp.
+    // 维度计数法：任何单维度都不算语义查询，至少 2 个维度组合才算。
+
+    // keyword_* 规则 span 单独成立
+    for (const MatchSpan &span : intent.consumedSpans()) {
+        if (span.ruleId().startsWith("keyword_")) {
+            return true;
+        }
+    }
+
+    int dimensionCount = 0;
+    if (!intent.searchDirectories().isEmpty()) ++dimensionCount;
+    if (intent.hiddenOnly()) ++dimensionCount;
+    if (intent.recentOnly()) ++dimensionCount;
+    if (intent.timeConstraint().isValid()) ++dimensionCount;
+    if (intent.sizeConstraint().isValid()) ++dimensionCount;
+    if (!intent.fileExtensions().isEmpty()) ++dimensionCount;
+    if (!intent.keywords().isEmpty()) ++dimensionCount;
+    bool hasTargetRule = false;
+    for (const MatchSpan &span : intent.consumedSpans()) {
+        if (span.ruleId().startsWith("target_")) {
+            hasTargetRule = true;
+            break;
+        }
+    }
+    if (hasTargetRule) ++dimensionCount;
+
+    bool hasSpecificFt = false;
+    bool hasGeneralFt = false;
+    for (const MatchSpan &span : intent.consumedSpans()) {
+        const QString rid = span.ruleId();
+        if (rid.startsWith("filetype_")) {
+            if (rid.endsWith("_general"))
+                hasGeneralFt = true;
+            else
+                hasSpecificFt = true;
+        }
+    }
+    if (hasSpecificFt && hasGeneralFt) ++dimensionCount;
+
+    return dimensionCount >= 2;
 }
 
 }   // namespace
@@ -720,15 +772,28 @@ private Q_SLOTS:
     void fileTypeDocument();
     void locationDesktop();
     void locationDownloads();
-    void locationTrash();
     void sizeLarge();
     void sizeSmall();
     void sizeDynamic();
     void timeAndFileType();
+    void singleTimeOnly();
+    void singleSizeOnly();
+    void singleFileTypeOnly();
+    void singleRecentOnly();
+    void timePlusTarget();
+    void timePlusFileType();
+    void fileTypePlusTarget();
+    void specificAndGeneralFiletype();
+    void sizePlusFileType();
+    void recentPlusTarget();
     void locationAndTime();
     void keywordOnlyNoMatch();
     void consecutiveCalls();
     void noiseWordsOnly();
+    void hiddenFile();
+    void structuredKeywordRule();
+    void locationOnlyRejected();
+    void locationPlusDimensionAccepted();
 
 private:
     SemanticRuleEngine *m_engine = nullptr;
@@ -744,7 +809,7 @@ void tst_IsSemanticQuery::initTestCase()
     m_engine = new SemanticRuleEngine(this);
     const QString dir = sourceRulesDir();
     const QStringList ruleFiles = QDir(dir).entryList(
-            {"*.json"}, QDir::Files, QDir::Name);
+            { "*.json" }, QDir::Files, QDir::Name);
     for (const QString &filename : ruleFiles) {
         QString path = dir + "/" + filename;
         if (!m_engine->loadRuleFile(path)) {
@@ -796,7 +861,7 @@ void tst_IsSemanticQuery::yesterdayKeyword()
 void tst_IsSemanticQuery::thisWeekKeyword()
 {
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "本周的文档"));
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "这周修改的"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "这周修改的"));
 }
 
 void tst_IsSemanticQuery::lastMonthKeyword()
@@ -807,19 +872,19 @@ void tst_IsSemanticQuery::lastMonthKeyword()
 void tst_IsSemanticQuery::fileTypePdf()
 {
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "pdf文档"));
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "找一下pdf"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "找一下pdf"));
 }
 
 void tst_IsSemanticQuery::fileTypeImage()
 {
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "图片"));
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "截图"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "图片"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "截图"));
 }
 
 void tst_IsSemanticQuery::fileTypeDocument()
 {
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "文档"));
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "报告"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "文档"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "报告"));
 }
 
 void tst_IsSemanticQuery::locationDesktop()
@@ -830,12 +895,6 @@ void tst_IsSemanticQuery::locationDesktop()
 void tst_IsSemanticQuery::locationDownloads()
 {
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "下载的文件"));
-}
-
-void tst_IsSemanticQuery::locationTrash()
-{
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "回收站的文件"));
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "删除的文件"));
 }
 
 void tst_IsSemanticQuery::sizeLarge()
@@ -852,7 +911,8 @@ void tst_IsSemanticQuery::sizeSmall()
 void tst_IsSemanticQuery::sizeDynamic()
 {
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "大于500M的文件"));
-    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "小于100K"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "小于100K"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "小于100K文件"));
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "10M以上的表格"));
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "1G以内的文档"));
 }
@@ -861,6 +921,76 @@ void tst_IsSemanticQuery::timeAndFileType()
 {
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "今天的pdf"));
     QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "本周的图片"));
+}
+
+void tst_IsSemanticQuery::singleTimeOnly()
+{
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "去年"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "去年的"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "今天的"));
+}
+
+void tst_IsSemanticQuery::singleSizeOnly()
+{
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "大于10M"));
+}
+
+void tst_IsSemanticQuery::singleFileTypeOnly()
+{
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "PPT"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "文档"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "报告"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "图片"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "截图"));
+}
+
+void tst_IsSemanticQuery::singleRecentOnly()
+{
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "打开过的"));
+}
+
+void tst_IsSemanticQuery::timePlusTarget()
+{
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "去年的文件"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "去年的预算"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "今天的文件"));
+}
+
+void tst_IsSemanticQuery::timePlusFileType()
+{
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "去年的报告"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "本周的图片"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "今天的pdf"));
+}
+
+void tst_IsSemanticQuery::fileTypePlusTarget()
+{
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "PPT文件"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "pdf文件"));
+}
+
+void tst_IsSemanticQuery::specificAndGeneralFiletype()
+{
+    // specific filetype + general filetype word (文档/表格/幻灯片) should be
+    // recognized as semantic (≥2 dimensions via the specific+general combo rule).
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "PPT文档"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "pdf文档"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "xls表格"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "PPT幻灯片"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "Word文档"));
+}
+
+void tst_IsSemanticQuery::sizePlusFileType()
+{
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "大于10M的文档"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "10M以上的表格"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "1G以内的文档"));
+}
+
+void tst_IsSemanticQuery::recentPlusTarget()
+{
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "打开过的预算"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "打开过的文件"));
 }
 
 void tst_IsSemanticQuery::locationAndTime()
@@ -900,6 +1030,45 @@ void tst_IsSemanticQuery::noiseWordsOnly()
     QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "查找"));
 }
 
+void tst_IsSemanticQuery::hiddenFile()
+{
+    // hiddenOnly + target "文件" = 2 维度 → 通过
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "隐藏文件"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "隐藏的文件"));
+    // 纯属性槽单维度 → 不通过（与"打开过的"、"隐藏的"一致）
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "藏起来的"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "看不到的"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "隐藏的"));
+    // time + hiddenOnly = 2 维度 → 通过
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "今天的隐藏文件"));
+}
+
+void tst_IsSemanticQuery::structuredKeywordRule()
+{
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "包含测试的文件"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "文件名包含测试的文档"));
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "文件内容包含配置的文档"));
+}
+
+void tst_IsSemanticQuery::locationOnlyRejected()
+{
+    // 仅命中位置槽、无其他维度 —— 不应通过语义查询检查。
+    // 这类查询本质是"列出某目录所有文件"，indexedstrategy 没有列全部文件的能力，
+    // 由 guardNonSemantic 拦下报 InvalidQuery，避免进入 doSearch 后空关键字报错。
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "下载"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "微信"));
+    QVERIFY(!checkIsSemanticQuery(m_engine, m_parser, "桌面"));
+}
+
+void tst_IsSemanticQuery::locationPlusDimensionAccepted()
+{
+    // 位置槽 + 其他维度 —— 应通过语义查询检查。
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "下载的隐藏文件"));   // location + hiddenOnly
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "下载的文档"));         // location + fileExtensions
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "下载的pdf"));          // location + fileExtensions
+    QVERIFY(checkIsSemanticQuery(m_engine, m_parser, "桌面的今天的文件"));   // location + time + target
+}
+
 // ===== tst_SearchTarget =====
 
 class tst_SearchTarget : public QObject
@@ -929,7 +1098,7 @@ void tst_SearchTarget::initTestCase()
     m_engine = new SemanticRuleEngine(this);
     const QString dir = sourceRulesDir();
     const QStringList ruleFiles = QDir(dir).entryList(
-            {"*.json"}, QDir::Files, QDir::Name);
+            { "*.json" }, QDir::Files, QDir::Name);
     for (const QString &filename : ruleFiles) {
         QString path = dir + "/" + filename;
         if (!m_engine->loadRuleFile(path)) {
@@ -944,42 +1113,42 @@ void tst_SearchTarget::defaultIsAll()
 {
     ParsedIntent intent;
     m_extractor->extract("蓝天白云", intent);
-    QCOMPARE(intent.searchTarget, SearchTarget::All);
+    QCOMPARE(intent.searchTarget(), SearchTarget::All);
 }
 
 void tst_SearchTarget::filenameContains()
 {
     ParsedIntent intent;
     m_extractor->extract("文件名包含测试的文档", intent);
-    QCOMPARE(intent.searchTarget, SearchTarget::FileNameOnly);
-    QCOMPARE(intent.keywords.size(), 1);
-    QCOMPARE(intent.keywords.first(), QString("测试"));
+    QCOMPARE(intent.searchTarget(), SearchTarget::FileNameOnly);
+    QCOMPARE(intent.keywords().size(), 1);
+    QCOMPARE(intent.keywords().first(), QString("测试"));
 }
 
 void tst_SearchTarget::filenameNamed()
 {
     ParsedIntent intent;
     m_extractor->extract("名为报告的文件", intent);
-    QCOMPARE(intent.searchTarget, SearchTarget::FileNameOnly);
-    QCOMPARE(intent.keywords.size(), 1);
-    QCOMPARE(intent.keywords.first(), QString("报告"));
+    QCOMPARE(intent.searchTarget(), SearchTarget::FileNameOnly);
+    QCOMPARE(intent.keywords().size(), 1);
+    QCOMPARE(intent.keywords().first(), QString("报告"));
 }
 
 void tst_SearchTarget::contentContains()
 {
     ParsedIntent intent;
     m_extractor->extract("文件内容包含配置的文档", intent);
-    QCOMPARE(intent.searchTarget, SearchTarget::ContentOnly);
-    QCOMPARE(intent.keywords.size(), 1);
-    QCOMPARE(intent.keywords.first(), QString("配置"));
+    QCOMPARE(intent.searchTarget(), SearchTarget::ContentOnly);
+    QCOMPARE(intent.keywords().size(), 1);
+    QCOMPARE(intent.keywords().first(), QString("配置"));
 }
 
 void tst_SearchTarget::genericContainsStaysAll()
 {
     ParsedIntent intent;
     m_extractor->extract("包含测试的文件", intent);
-    QCOMPARE(intent.searchTarget, SearchTarget::All);
-    QVERIFY(!intent.keywords.isEmpty());
+    QCOMPARE(intent.searchTarget(), SearchTarget::All);
+    QVERIFY(!intent.keywords().isEmpty());
 }
 
 void tst_SearchTarget::unconsumedTextStaysAll()
@@ -987,8 +1156,184 @@ void tst_SearchTarget::unconsumedTextStaysAll()
     // No structured keyword rule matches → unconsumed text extraction
     ParsedIntent intent;
     m_extractor->extract("项目计划书", intent);
-    QCOMPARE(intent.searchTarget, SearchTarget::All);
-    QVERIFY(!intent.keywords.isEmpty());
+    QCOMPARE(intent.searchTarget(), SearchTarget::All);
+    QVERIFY(!intent.keywords().isEmpty());
+}
+
+// ===== tst_LocationExtraction =====
+
+class tst_LocationExtraction : public QObject
+{
+    Q_OBJECT
+
+private Q_SLOTS:
+    // Static method tests — no source-tree rule dependency
+    void expandGlobNoMatch();
+    void expandGlobSingleMatch();
+    void expandGlobMultipleMatches();
+    void expandGlobNestedDirs();
+    void expandNonGlob();
+    void expandGlobQuestionMark();
+
+    // Integration tests — inline rules only
+    void extractWechatTriggerWords();
+    void extractCustomPathResolved();
+};
+
+void tst_LocationExtraction::expandGlobNoMatch()
+{
+    // Glob matching nothing → empty result (no crash)
+    QStringList result = LocationExtractor::expandCustomPath("/tmp", "nonexistent/*/data");
+    QVERIFY(result.isEmpty());
+}
+
+void tst_LocationExtraction::expandGlobSingleMatch()
+{
+    QString tmpBase = QDir::temp().filePath("tst_loc_" + QString::number(QDateTime::currentSecsSinceEpoch()));
+    QDir().mkpath(tmpBase + "/user_a/sub/folder");
+
+    QStringList result = LocationExtractor::expandCustomPath(tmpBase, "user_*/sub/folder");
+    QCOMPARE(result.size(), 1);
+    QVERIFY(result.first().endsWith("/user_a/sub/folder"));
+
+    QDir(tmpBase).removeRecursively();
+}
+
+void tst_LocationExtraction::expandGlobMultipleMatches()
+{
+    QString tmpBase = QDir::temp().filePath("tst_loc_" + QString::number(QDateTime::currentSecsSinceEpoch()));
+    QDir().mkpath(tmpBase + "/wxid_abc/msg/file");
+    QDir().mkpath(tmpBase + "/wxid_def/msg/file");
+    QDir().mkpath(tmpBase + "/wxid_ghi/msg/file");
+
+    QStringList result = LocationExtractor::expandCustomPath(tmpBase, "wxid_*/msg/file");
+    // At least our 3 test dirs should be present
+    QVERIFY(result.size() >= 3);
+    bool hasA = false, hasD = false, hasG = false;
+    for (const QString &p : result) {
+        if (p.contains("/wxid_abc/msg/file")) hasA = true;
+        if (p.contains("/wxid_def/msg/file")) hasD = true;
+        if (p.contains("/wxid_ghi/msg/file")) hasG = true;
+    }
+    QVERIFY(hasA && hasD && hasG);
+
+    QDir(tmpBase).removeRecursively();
+}
+
+void tst_LocationExtraction::expandGlobNestedDirs()
+{
+    // Pattern: a/b/*/c/d → a/<user>/c/d
+    QString tmpBase = QDir::temp().filePath("tst_loc_" + QString::number(QDateTime::currentMSecsSinceEpoch()));
+    QDir().mkpath(tmpBase + "/docs/users/u1/c/d");
+    QDir().mkpath(tmpBase + "/docs/users/u2/c/d");
+
+    QStringList result = LocationExtractor::expandCustomPath(tmpBase, "docs/users/*/c/d");
+    QVERIFY(result.size() >= 2);
+
+    QDir(tmpBase).removeRecursively();
+}
+
+void tst_LocationExtraction::expandNonGlob()
+{
+    // Non-glob path is returned as-is, appended to base
+    QStringList result = LocationExtractor::expandCustomPath("/home/test", "Downloads/myapp/data");
+    QCOMPARE(result, QStringList { "/home/test/Downloads/myapp/data" });
+}
+
+void tst_LocationExtraction::expandGlobQuestionMark()
+{
+    // ? matches single character
+    QString tmpBase = QDir::temp().filePath("tst_loc_" + QString::number(QDateTime::currentMSecsSinceEpoch()));
+    QDir().mkpath(tmpBase + "/dir_a/data");
+    QDir().mkpath(tmpBase + "/dir_b/data");
+    QDir().mkpath(tmpBase + "/dir_abc/data");   // won't match "?_" pattern
+
+    QStringList result = LocationExtractor::expandCustomPath(tmpBase, "dir_?/data");
+    QVERIFY(result.size() >= 2);
+
+    bool hasA = false, hasB = false;
+    for (const QString &p : result) {
+        if (p.endsWith("/dir_a/data")) hasA = true;
+        if (p.endsWith("/dir_b/data")) hasB = true;
+    }
+    QVERIFY(hasA && hasB);
+
+    QDir(tmpBase).removeRecursively();
+}
+
+void tst_LocationExtraction::extractWechatTriggerWords()
+{
+    // Build inline rule engine to avoid source-tree / local filesystem dependency.
+    // Directory must be under QDir::homePath() so expandCustomPath can find it.
+    const QString suffix = QString::number(QDateTime::currentSecsSinceEpoch());
+    const QString baseName = "tst_wechat_" + suffix;
+    const QString tmpDir = QDir::home().filePath(baseName);
+    QDir().mkpath(tmpDir);
+
+    QByteArray json = makeRuleJson("location", "loc_test_wechat", "微信|vx|wechat", 180,
+                                   { { "custom_path", baseName },
+                                     { "include_hidden", false } });
+
+    QFile f(QDir::temp().filePath("tst_wechat_inline.json"));
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write(json);
+    f.close();
+
+    SemanticRuleEngine engine;
+    QVERIFY(engine.loadRuleFile(f.fileName()));
+
+    LocationExtractor extractor(&engine);
+    const QStringList inputs = { "微信的文件", "vx收到的", "wechat文件" };
+    for (const QString &input : inputs) {
+        ParsedIntent intent;
+        extractor.extract(input, intent);
+        QVERIFY2(!intent.consumedSpans().isEmpty(),
+                 qUtf8Printable("Expected consumed span for: " + input));
+        QVERIFY2(!intent.searchDirectories().isEmpty(),
+                 qUtf8Printable("Expected searchDirectory for: " + input));
+    }
+
+    f.remove();
+    QDir(tmpDir).rmdir(tmpDir);
+}
+
+void tst_LocationExtraction::extractCustomPathResolved()
+{
+    // Verify extract() resolves custom_path and appends to searchDirectories.
+    // Directory must live under QDir::homePath() so expandCustomPath can find it.
+    const QString suffix = QString::number(QDateTime::currentSecsSinceEpoch());
+    const QString baseName = "tst_custom_" + suffix;
+    // Create under home, not QDir::temp() (which may be /tmp, outside home path)
+    const QString tmpDir = QDir::home().filePath(baseName);
+    QDir().mkpath(tmpDir + "/data");
+
+    QByteArray json = makeRuleJson("location", "loc_test_cp", "我的目录", 180,
+                                   { { "custom_path", baseName + "/data" },
+                                     { "include_hidden", false } });
+
+    QFile f(QDir::temp().filePath("tst_cp_inline.json"));
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write(json);
+    f.close();
+
+    SemanticRuleEngine engine;
+    QVERIFY(engine.loadRuleFile(f.fileName()));
+
+    LocationExtractor extractor(&engine);
+    ParsedIntent intent;
+    extractor.extract("我的目录的文件", intent);
+
+    QVERIFY2(!intent.searchDirectories().isEmpty(),
+             "Expected at least one resolved search directory");
+    // Path must end with /data
+    bool hasData = false;
+    for (const QString &path : intent.searchDirectories()) {
+        if (path.endsWith("/data")) hasData = true;
+    }
+    QVERIFY(hasData);
+
+    f.remove();
+    QDir(tmpDir).removeRecursively();
 }
 
 // ===== tst_SemanticQueryBuilderTarget =====
@@ -1001,6 +1346,8 @@ private Q_SLOTS:
     void defaultTarget();
     void fileNameOnlyTarget();
     void contentOnlyTarget();
+    void hiddenOnlyNoKeyword();
+    void noKeywordWithFileExtensions();
 
 private:
     ParsedIntent makeIntent(const QStringList &keywords, SearchTarget target) const;
@@ -1010,15 +1357,15 @@ ParsedIntent tst_SemanticQueryBuilderTarget::makeIntent(
         const QStringList &keywords, SearchTarget target) const
 {
     ParsedIntent intent;
-    intent.keywords = keywords;
-    intent.searchTarget = target;
+    intent.setKeywords(keywords);
+    intent.setSearchTarget(target);
     return intent;
 }
 
 void tst_SemanticQueryBuilderTarget::defaultTarget()
 {
     SemanticQueryBuilder builder;
-    ParsedIntent intent = makeIntent({"测试"}, SearchTarget::All);
+    ParsedIntent intent = makeIntent({ "测试" }, SearchTarget::All);
     SemanticSearchPlan plan = builder.build(intent);
 
     // All three paths should produce queries
@@ -1030,7 +1377,7 @@ void tst_SemanticQueryBuilderTarget::defaultTarget()
 void tst_SemanticQueryBuilderTarget::fileNameOnlyTarget()
 {
     SemanticQueryBuilder builder;
-    ParsedIntent intent = makeIntent({"测试"}, SearchTarget::FileNameOnly);
+    ParsedIntent intent = makeIntent({ "测试" }, SearchTarget::FileNameOnly);
     SemanticSearchPlan plan = builder.build(intent);
 
     // Only filename query should be built
@@ -1042,7 +1389,7 @@ void tst_SemanticQueryBuilderTarget::fileNameOnlyTarget()
 void tst_SemanticQueryBuilderTarget::contentOnlyTarget()
 {
     SemanticQueryBuilder builder;
-    ParsedIntent intent = makeIntent({"测试"}, SearchTarget::ContentOnly);
+    ParsedIntent intent = makeIntent({ "测试" }, SearchTarget::ContentOnly);
     SemanticSearchPlan plan = builder.build(intent);
 
     // Filename should NOT be built; content and ocr should
@@ -1051,15 +1398,93 @@ void tst_SemanticQueryBuilderTarget::contentOnlyTarget()
     QVERIFY(plan.ocrQuery.has_value());
 }
 
+void tst_SemanticQueryBuilderTarget::hiddenOnlyNoKeyword()
+{
+    // "下载的隐藏文件" 这类仅含位置槽 + 属性槽、无关键字槽的语义搜索：
+    // 解析后 hiddenOnly=true、includeHidden=true、searchTarget=FileNameOnly、keywords=[]。
+    // 预期 plan 仍应构建 fileName 路径（空关键字），由 indexedstrategy 的
+    // hiddenOnlyQuery (kIsHidden:Y) 作为主查询条件，pathPrefixQuery 限制到下载目录。
+    SemanticQueryBuilder builder;
+    ParsedIntent intent;
+    intent.setKeywords({});                  // 无关键字
+    intent.setHiddenOnly(true);
+    intent.setIncludeHidden(true);
+    intent.setSearchTarget(SearchTarget::FileNameOnly);
+    intent.setSearchDirectories({ QStringLiteral("/home/test/Downloads") });
+
+    SemanticSearchPlan plan = builder.build(intent);
+
+    // plan 顶层标志必须正确（SemanticSearcher.prepareOptions 会据此透传到 SearchOptions）
+    QVERIFY(plan.hiddenOnly);
+    QVERIFY(plan.includeHidden);
+    QVERIFY(plan.searchDirectories == QStringList { QStringLiteral("/home/test/Downloads") });
+
+    // 无关键字时改用 wildcard "*" 匹配所有文件名 ——
+    // indexedstrategy Wildcard 分支 buildWildcardQuery("*") 生成匹配所有文件名的 WildcardQuery，
+    // 让 pathPrefixQuery / hiddenOnlyQuery 作为真正的过滤器叠加。
+    QCOMPARE(plan.fileNameQuery.keyword(), QStringLiteral("*"));
+    QCOMPARE(plan.fileNameQuery.type(), SearchQuery::Type::Wildcard);
+
+    // content/ocr 不应启用（hiddenOnly 强制 FileNameOnly，且无关键字）
+    QVERIFY(!plan.contentQuery.has_value());
+    QVERIFY(!plan.ocrQuery.has_value());
+}
+
+void tst_SemanticQueryBuilderTarget::noKeywordWithFileExtensions()
+{
+    // "今天的图片"、"下载的pdf" 这类有 fileExtensions 但无 keyword 的查询：
+    // fileNameQuery 必须保持空 Simple（不是 wildcard "*"），否则 determineSearchType
+    // 会把 wildcard "*" 误导进 Combined 分支用 buildSimpleQuery("*") 走 NGram —— 错误。
+    // 空 Simple 让 determineSearchType 走 Combined(ext only)，由 extQuery 作主查询条件。
+    SemanticQueryBuilder builder;
+    ParsedIntent intent;
+    intent.setKeywords({});
+    intent.setFileExtensions({ "png", "jpg" });
+    intent.setSearchTarget(SearchTarget::All);
+
+    SemanticSearchPlan plan = builder.build(intent);
+
+    QVERIFY(plan.fileNameQuery.keyword().isEmpty());
+    QCOMPARE(plan.fileNameQuery.type(), SearchQuery::Type::Simple);
+}
+
 // ===== Factory functions =====
 
-QObject *create_tst_RuleEngine() { return new tst_RuleEngine(); }
-QObject *create_tst_TimeExtraction() { return new tst_TimeExtraction(); }
-QObject *create_tst_FileTypeExtraction() { return new tst_FileTypeExtraction(); }
-QObject *create_tst_KeywordExtraction() { return new tst_KeywordExtraction(); }
-QObject *create_tst_ParsedIntent() { return new tst_ParsedIntent(); }
-QObject *create_tst_IsSemanticQuery() { return new tst_IsSemanticQuery(); }
-QObject *create_tst_SearchTarget() { return new tst_SearchTarget(); }
-QObject *create_tst_SemanticQueryBuilderTarget() { return new tst_SemanticQueryBuilderTarget(); }
+QObject *create_tst_RuleEngine()
+{
+    return new tst_RuleEngine();
+}
+QObject *create_tst_TimeExtraction()
+{
+    return new tst_TimeExtraction();
+}
+QObject *create_tst_FileTypeExtraction()
+{
+    return new tst_FileTypeExtraction();
+}
+QObject *create_tst_KeywordExtraction()
+{
+    return new tst_KeywordExtraction();
+}
+QObject *create_tst_ParsedIntent()
+{
+    return new tst_ParsedIntent();
+}
+QObject *create_tst_IsSemanticQuery()
+{
+    return new tst_IsSemanticQuery();
+}
+QObject *create_tst_SearchTarget()
+{
+    return new tst_SearchTarget();
+}
+QObject *create_tst_SemanticQueryBuilderTarget()
+{
+    return new tst_SemanticQueryBuilderTarget();
+}
+QObject *create_tst_LocationExtraction()
+{
+    return new tst_LocationExtraction();
+}
 
 #include "tst_semantic_search.moc"

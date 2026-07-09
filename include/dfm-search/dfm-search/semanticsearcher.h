@@ -85,10 +85,37 @@ public:
     void search(const QString &naturalLanguage, const QStringList &searchDirectories);
 
     /**
+     * @brief Parse natural language input into a structured intent.
+     *
+     * Synchronously runs the full dimension extractor pipeline (time, size,
+     * file type, action, location, keyword) and returns the result. Does NOT
+     * start any search. Use this when you need to inspect what the NLP parser
+     * understood without triggering a search — e.g., for intent preview UIs,
+     * debugging, or composing custom search plans.
+     *
+     * Equivalent to the parsing performed internally by search() before
+     * searchStarted fires; the same ParsedIntent is emitted via intentParsed().
+     *
+     * @param input The natural language query string
+     * @return The parsed intent. If parsing yields no constraints, the returned
+     *         ParsedIntent has an invalid timeConstraint, invalid sizeConstraint,
+     *         empty fileExtensions, empty searchDirectories, and empty consumedSpans.
+     *
+     * @see isSemanticQuery() for a boolean check built on top of this method.
+     */
+    ParsedIntent parseIntent(const QString &input) const;
+
+    /**
      * @brief Check if the input contains semantic intent beyond a plain keyword.
      *
-     * Returns true if parsing the input reveals time constraints, size constraints,
-     * file type filters, or location constraints. Returns false for plain keyword input.
+     * Returns true for self-sufficient semantic actions/locations, structured keyword
+     * rules, or constraint-plus-target combinations. Returns false for single-slot
+     * inputs such as a lone time, size, or filetype constraint.
+     *
+     * This is a convenience wrapper around parseIntent(): it parses once and
+     * checks whether any semantic dimension was extracted. The parsing result
+     * is discarded; if you need the parsed intent, call parseIntent() directly
+     * to avoid parsing twice.
      *
      * This allows callers to avoid unnecessary semantic search overhead when
      * the user is just typing a simple keyword.
@@ -97,6 +124,17 @@ public:
      * @return true if the input contains semantic intent, false for plain keywords
      */
     bool isSemanticQuery(const QString &input) const;
+
+    /**
+     * @brief Check whether a parsed intent should use semantic search.
+     *
+     * This overload lets callers reuse an already parsed intent and avoid
+     * re-running the NLP pipeline.
+     *
+     * @param intent The parsed intent to evaluate
+     * @return true if the parsed intent is semantic, false otherwise
+     */
+    bool isSemanticQuery(const DFMSEARCH::ParsedIntent &intent) const;
 
     /**
      * @brief Perform a synchronous semantic search

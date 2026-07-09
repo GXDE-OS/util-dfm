@@ -19,9 +19,11 @@ extern QObject *create_tst_SizeRangeFilter();
 extern QObject *create_tst_IsSemanticQuery();
 extern QObject *create_tst_SearchTarget();
 extern QObject *create_tst_SemanticQueryBuilderTarget();
+extern QObject *create_tst_LocationExtraction();
 extern QObject *create_tst_ContentRetriever();
 extern QObject *create_tst_ContentSearchEngine();
 extern QObject *create_tst_FileNameSearchEngine();
+extern QObject *create_tst_RecentSearchEngine();
 
 int main(int argc, char *argv[])
 {
@@ -84,6 +86,10 @@ int main(int argc, char *argv[])
     result |= QTest::qExec(testObj14, argc, argv);
     delete testObj14;
 
+    QObject *testObj14b = create_tst_LocationExtraction();
+    result |= QTest::qExec(testObj14b, argc, argv);
+    delete testObj14b;
+
     QObject *testObj15 = create_tst_ContentRetriever();
     result |= QTest::qExec(testObj15, argc, argv);
     delete testObj15;
@@ -95,6 +101,10 @@ int main(int argc, char *argv[])
     QObject *testObj17 = create_tst_FileNameSearchEngine();
     result |= QTest::qExec(testObj17, argc, argv);
     delete testObj17;
+
+    QObject *testObj18 = create_tst_RecentSearchEngine();
+    result |= QTest::qExec(testObj18, argc, argv);
+    delete testObj18;
 
     return result;
 }

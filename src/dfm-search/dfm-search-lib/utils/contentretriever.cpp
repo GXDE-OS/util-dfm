@@ -7,8 +7,11 @@
 #include <dfm-search/field_names.h>
 
 #include "utils/contenthighlighter.h"
+#include "utils/highlightoptions_p.h"
+#include "utils/searchutility.h"
 
 #include <QDebug>
+#include <QFileInfo>
 #include <QHash>
 #include <QMutex>
 #include <QMutexLocker>
@@ -21,6 +24,7 @@
 #include <lucene++/Term.h>
 #include <lucene++/TermQuery.h>
 #include <lucene++/TopDocs.h>
+#include <optional>
 
 using namespace Lucene;
 
@@ -98,7 +102,70 @@ struct CachedIndexContext
     SearcherPtr searcher;
 };
 
+/**
+ * @brief Route SearchType::Semantic to Content or Ocr based on file extension.
+ * @return The resolved SearchType, or std::nullopt if the extension matches neither category.
+ */
+static std::optional<SearchType> resolveSemanticType(const QString &path)
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix.isEmpty())
+        return std::nullopt;
+
+    if (SearchUtility::semanticDocExtensions().contains(suffix))
+        return SearchType::Content;
+    if (SearchUtility::semanticPicExtensions().contains(suffix))
+        return SearchType::Ocr;
+
+    return std::nullopt;
+}
+
 }   // namespace
+
+// ── HighlightOptions (Pimpl) ──────────────────────────────────────────
+
+HighlightOptions::HighlightOptions()
+    : d(new HighlightOptionsPrivate)
+{
+}
+
+HighlightOptions::~HighlightOptions() = default;
+
+HighlightOptions::HighlightOptions(const HighlightOptions &other) = default;
+
+HighlightOptions &HighlightOptions::operator=(const HighlightOptions &other) = default;
+
+int HighlightOptions::maxPreviewLength() const
+{
+    return d->maxPreviewLength;
+}
+
+void HighlightOptions::setMaxPreviewLength(int length)
+{
+    d->maxPreviewLength = length;
+}
+
+int HighlightOptions::positioningMaxLength() const
+{
+    return d->positioningMaxLength;
+}
+
+void HighlightOptions::setPositioningMaxLength(int length)
+{
+    d->positioningMaxLength = length;
+}
+
+bool HighlightOptions::enableHtml() const
+{
+    return d->enableHtml;
+}
+
+void HighlightOptions::setEnableHtml(bool enable)
+{
+    d->enableHtml = enable;
+}
+
+// ── ContentRetriever ───────────────────────────────────────────────────
 
 struct ContentRetriever::Private
 {
@@ -198,7 +265,19 @@ QString ContentRetriever::fetchHighlight(const QString &path,
                                          const HighlightOptions &options) const
 {
     if (path.isEmpty() || keyword.isEmpty()) return {};
-    if (type != SearchType::Content && type != SearchType::Ocr) return {};
+
+    // Route SearchType::Semantic to Content or Ocr based on file extension
+    if (type == SearchType::Semantic) {
+        std::optional<SearchType> resolved = resolveSemanticType(path);
+        if (!resolved) {
+            qWarning() << "ContentRetriever: cannot route Semantic type for" << path
+                       << "- extension does not match doc or pic suffixes";
+            return {};
+        }
+        type = *resolved;
+    } else if (type != SearchType::Content && type != SearchType::Ocr) {
+        return {};
+    }
 
     const QStringList keywords = splitKeywords(keyword);
     if (keywords.isEmpty()) return {};
@@ -219,8 +298,8 @@ QString ContentRetriever::fetchHighlight(const QString &path,
         }
 
         return ContentHighlighter::customHighlight(
-                keywords, content, options.maxPreviewLength, options.enableHtml,
-                options.positioningMaxLength);
+                keywords, content, options.maxPreviewLength(), options.enableHtml(),
+                options.positioningMaxLength());
     } catch (const LuceneException &e) {
         qWarning() << "ContentRetriever: error fetching highlight for" << path
                    << QString::fromStdWString(e.getError());
@@ -238,31 +317,47 @@ QMap<QString, QString> ContentRetriever::fetchHighlights(const QStringList &path
 {
     QMap<QString, QString> results;
     if (paths.isEmpty() || keyword.isEmpty()) return results;
-    if (type != SearchType::Content && type != SearchType::Ocr) return results;
+
+    if (type != SearchType::Content && type != SearchType::Ocr && type != SearchType::Semantic)
+        return results;
 
     const QStringList keywords = splitKeywords(keyword);
     if (keywords.isEmpty()) return results;
 
-    const QString indexDir = indexDirectory(type);
-
     QMutexLocker locker(&d->mutex);
-    CachedIndexContext *ctx = d->ensureIndexContext(type, indexDir);
-    if (!ctx || !ctx->searcher) {
-        return results;
-    }
 
     for (const QString &path : paths) {
+        // For Semantic, route each path individually based on its extension
+        SearchType effectiveType = type;
+        if (type == SearchType::Semantic) {
+            std::optional<SearchType> resolved = resolveSemanticType(path);
+            if (!resolved) {
+                qWarning() << "ContentRetriever: cannot route Semantic type for" << path
+                           << "- extension does not match doc or pic suffixes";
+                results.insert(path, {});
+                continue;
+            }
+            effectiveType = *resolved;
+        }
+
+        const QString indexDir = indexDirectory(effectiveType);
+        CachedIndexContext *ctx = d->ensureIndexContext(effectiveType, indexDir);
+        if (!ctx || !ctx->searcher) {
+            results.insert(path, {});
+            continue;
+        }
+
         try {
-            const DocumentPtr doc = findDocumentByPath(ctx->searcher, path, type);
-            const QString content = storedContentFromDocument(doc, type);
+            const DocumentPtr doc = findDocumentByPath(ctx->searcher, path, effectiveType);
+            const QString content = storedContentFromDocument(doc, effectiveType);
             if (content.isEmpty()) {
                 results.insert(path, {});
                 continue;
             }
 
             results.insert(path, ContentHighlighter::customHighlight(
-                                         keywords, content, options.maxPreviewLength, options.enableHtml,
-                                         options.positioningMaxLength));
+                                         keywords, content, options.maxPreviewLength(), options.enableHtml(),
+                                         options.positioningMaxLength()));
         } catch (const LuceneException &e) {
             qWarning() << "ContentRetriever: error for" << path
                        << QString::fromStdWString(e.getError());
@@ -279,7 +374,18 @@ QMap<QString, QString> ContentRetriever::fetchHighlights(const QStringList &path
 QString ContentRetriever::fetchContent(const QString &path, SearchType type) const
 {
     if (path.isEmpty()) return {};
-    if (type != SearchType::Content && type != SearchType::Ocr) return {};
+
+    if (type == SearchType::Semantic) {
+        std::optional<SearchType> resolved = resolveSemanticType(path);
+        if (!resolved) {
+            qWarning() << "ContentRetriever: cannot route Semantic type for" << path
+                       << "- extension does not match doc or pic suffixes";
+            return {};
+        }
+        type = *resolved;
+    } else if (type != SearchType::Content && type != SearchType::Ocr) {
+        return {};
+    }
 
     const QString indexDir = indexDirectory(type);
 
@@ -306,19 +412,34 @@ QMap<QString, QString> ContentRetriever::fetchContents(const QStringList &paths,
 {
     QMap<QString, QString> results;
     if (paths.isEmpty()) return results;
-    if (type != SearchType::Content && type != SearchType::Ocr) return results;
 
-    const QString indexDir = indexDirectory(type);
+    if (type != SearchType::Content && type != SearchType::Ocr && type != SearchType::Semantic)
+        return results;
 
     QMutexLocker locker(&d->mutex);
-    CachedIndexContext *ctx = d->ensureIndexContext(type, indexDir);
-    if (!ctx || !ctx->searcher) {
-        return results;
-    }
 
     for (const QString &path : paths) {
+        SearchType effectiveType = type;
+        if (type == SearchType::Semantic) {
+            std::optional<SearchType> resolved = resolveSemanticType(path);
+            if (!resolved) {
+                qWarning() << "ContentRetriever: cannot route Semantic type for" << path
+                           << "- extension does not match doc or pic suffixes";
+                results.insert(path, {});
+                continue;
+            }
+            effectiveType = *resolved;
+        }
+
+        const QString indexDir = indexDirectory(effectiveType);
+        CachedIndexContext *ctx = d->ensureIndexContext(effectiveType, indexDir);
+        if (!ctx || !ctx->searcher) {
+            results.insert(path, {});
+            continue;
+        }
+
         try {
-            results.insert(path, storedContentFromDocument(findDocumentByPath(ctx->searcher, path, type), type));
+            results.insert(path, storedContentFromDocument(findDocumentByPath(ctx->searcher, path, effectiveType), effectiveType));
         } catch (const LuceneException &e) {
             qWarning() << "ContentRetriever: error for" << path
                        << QString::fromStdWString(e.getError());

@@ -129,7 +129,7 @@ static std::optional<QStringList> tryLoadStringListFromDConfigInternal(
         return std::nullopt;   // Type mismatch
     }
     // No need to delete dconfigPtr, dconfigParent will manage it when it goes out of scope.
-    return value.toStringList();
+    return value.toString().split(';');
 }
 
 // --- Specific Loader for "supportedFileExtensions" ---
@@ -339,6 +339,27 @@ static QStringList getResolvedIndexedDirectories()   // Renamed for clarity
 
     qDebug() << "Resolved indexed directories:" << processedPaths;
     return processedPaths;
+}
+
+// --- Loader for semantic doc/pic extensions from org.deepin.anything ---
+static QSet<QString> loadSemanticExtensionsFromDConfig(const QString &keyName)
+{
+    const QString appId = "org.deepin.anything";
+    const QString schemaId = "org.deepin.anything";
+    const QString valueKey = keyName;
+
+    std::optional<QStringList> stringListOpt =
+            tryLoadStringListFromDConfigInternal(appId, schemaId, valueKey);
+    if (!stringListOpt)
+        return {};
+
+    QSet<QString> set;
+    for (const QString &ext : *stringListOpt) {
+        QString cleaned = ext.startsWith('.') ? ext.mid(1) : ext;
+        if (!cleaned.isEmpty())
+            set.insert(cleaned.toLower());
+    }
+    return set;
 }
 
 bool isPinyinSequence(const QString &input)
@@ -852,6 +873,18 @@ QStringList deepinAnythingFileTypes()
 {
     static const QStringList kTypes { "app", "archive", "audio", "doc", "pic", "video", "dir", "other" };
     return kTypes;
+}
+
+QSet<QString> semanticDocExtensions()
+{
+    static const QSet<QString> kExts = DFMSEARCH::Global::loadSemanticExtensionsFromDConfig("doc_file_suffix");
+    return kExts;
+}
+
+QSet<QString> semanticPicExtensions()
+{
+    static const QSet<QString> kExts = DFMSEARCH::Global::loadSemanticExtensionsFromDConfig("pic_file_suffix");
+    return kExts;
 }
 
 }   // namespace SearchUtility

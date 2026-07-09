@@ -7,6 +7,7 @@
 
 #include <QDateTime>
 #include <QList>
+#include <QSharedDataPointer>
 #include <QString>
 #include <QStringList>
 
@@ -14,16 +15,37 @@
 
 DFM_SEARCH_BEGIN_NS
 
+class ParsedIntentPrivate;
+class MatchSpanPrivate;
+class TimeConstraintPrivate;
+class SizeConstraintPrivate;
+
 /**
  * @brief Represents a consumed span in the input text matched by a rule.
+ *
+ * Pimpl-based (QSharedDataPointer) for ABI stability.
  */
-struct MatchSpan
+class MatchSpan
 {
-    int start = -1;
-    int end = -1;
-    QString ruleId;
+public:
+    MatchSpan();
+    ~MatchSpan();
+    MatchSpan(const MatchSpan &other);
+    MatchSpan &operator=(const MatchSpan &other);
+    MatchSpan(MatchSpan &&other) noexcept;
+    MatchSpan &operator=(MatchSpan &&other) noexcept;
 
-    bool isValid() const { return start >= 0 && end > start; }
+    int start() const;
+    void setStart(int start);
+    int end() const;
+    void setEnd(int end);
+    QString ruleId() const;
+    void setRuleId(const QString &ruleId);
+
+    bool isValid() const;
+
+private:
+    QSharedDataPointer<MatchSpanPrivate> d;
 };
 
 /**
@@ -53,31 +75,68 @@ enum class TimeConstraintKind {
 
 /**
  * @brief Represents a parsed time constraint from natural language.
+ *
+ * Pimpl-based (QSharedDataPointer) for ABI stability.
  */
-struct TimeConstraint
+class TimeConstraint
 {
-    TimeConstraintKind kind = TimeConstraintKind::None;
-    TimePreset preset = TimePreset::Today;
-    int relativeValue = 0;
-    TimeUnit relativeUnit = TimeUnit::Days;
-    QDateTime customStart;
-    QDateTime customEnd;
-    TimeField timeField = TimeField::Unspecified;   // Set by ActionExtractor; Unspecified = no action specified
+public:
+    TimeConstraint();
+    ~TimeConstraint();
+    TimeConstraint(const TimeConstraint &other);
+    TimeConstraint &operator=(const TimeConstraint &other);
+    TimeConstraint(TimeConstraint &&other) noexcept;
+    TimeConstraint &operator=(TimeConstraint &&other) noexcept;
 
-    bool isValid() const { return kind != TimeConstraintKind::None; }
+    TimeConstraintKind kind() const;
+    void setKind(TimeConstraintKind kind);
+    TimePreset preset() const;
+    void setPreset(TimePreset preset);
+    int relativeValue() const;
+    void setRelativeValue(int value);
+    TimeUnit relativeUnit() const;
+    void setRelativeUnit(TimeUnit unit);
+    QDateTime customStart() const;
+    void setCustomStart(const QDateTime &start);
+    QDateTime customEnd() const;
+    void setCustomEnd(const QDateTime &end);
+    TimeField timeField() const;
+    void setTimeField(TimeField field);
+
+    bool isValid() const;
+
+private:
+    QSharedDataPointer<TimeConstraintPrivate> d;
 };
 
 /**
  * @brief Represents a parsed size constraint from natural language.
+ *
+ * Pimpl-based (QSharedDataPointer) for ABI stability.
  */
-struct SizeConstraint
+class SizeConstraint
 {
-    qint64 minSize = 0;    // Minimum size in bytes (0 = no lower bound)
-    qint64 maxSize = 0;    // Maximum size in bytes (0 = no upper bound)
-    bool includeLower = true;
-    bool includeUpper = true;
+public:
+    SizeConstraint();
+    ~SizeConstraint();
+    SizeConstraint(const SizeConstraint &other);
+    SizeConstraint &operator=(const SizeConstraint &other);
+    SizeConstraint(SizeConstraint &&other) noexcept;
+    SizeConstraint &operator=(SizeConstraint &&other) noexcept;
 
-    bool isValid() const { return minSize > 0 || maxSize > 0; }
+    qint64 minSize() const;
+    void setMinSize(qint64 size);
+    qint64 maxSize() const;
+    void setMaxSize(qint64 size);
+    bool includeLower() const;
+    void setIncludeLower(bool include);
+    bool includeUpper() const;
+    void setIncludeUpper(bool include);
+
+    bool isValid() const;
+
+private:
+    QSharedDataPointer<SizeConstraintPrivate> d;
 };
 
 /**
@@ -98,17 +157,69 @@ enum class SearchTarget {
  * This is the intermediate representation between NLP parsing
  * and search query construction. Declared public for future
  * structured API extensibility.
+ *
+ * Pimpl-based (QSharedDataPointer) for ABI stability:
+ * new fields can be added to ParsedIntentPrivate without
+ * breaking binary compatibility.
  */
-struct ParsedIntent
+class ParsedIntent
 {
-    TimeConstraint timeConstraint;
-    SizeConstraint sizeConstraint;
-    QStringList fileExtensions;
-    QStringList searchDirectories;   // Absolute paths resolved from location words
-    bool includeHidden = false;      // true for trash (hidden directory)
-    QStringList keywords;
-    SearchTarget searchTarget = SearchTarget::All;
-    QList<MatchSpan> consumedSpans;
+public:
+    ParsedIntent();
+    ~ParsedIntent();
+    ParsedIntent(const ParsedIntent &other);
+    ParsedIntent &operator=(const ParsedIntent &other);
+    ParsedIntent(ParsedIntent &&other) noexcept;
+    ParsedIntent &operator=(ParsedIntent &&other) noexcept;
+
+    // timeConstraint
+    const TimeConstraint &timeConstraint() const;
+    TimeConstraint &timeConstraint();
+    void setTimeConstraint(const TimeConstraint &tc);
+
+    // sizeConstraint
+    const SizeConstraint &sizeConstraint() const;
+    SizeConstraint &sizeConstraint();
+    void setSizeConstraint(const SizeConstraint &sc);
+
+    // fileExtensions
+    const QStringList &fileExtensions() const;
+    QStringList &fileExtensions();
+    void setFileExtensions(const QStringList &extensions);
+
+    // searchDirectories
+    const QStringList &searchDirectories() const;
+    QStringList &searchDirectories();
+    void setSearchDirectories(const QStringList &dirs);
+
+    // includeHidden
+    bool includeHidden() const;
+    void setIncludeHidden(bool include);
+
+    // hiddenOnly
+    bool hiddenOnly() const;
+    void setHiddenOnly(bool hidden);
+
+    // recentOnly — true means search recently-used files via DBus RecentManager
+    bool recentOnly() const;
+    void setRecentOnly(bool recent);
+
+    // keywords
+    const QStringList &keywords() const;
+    QStringList &keywords();
+    void setKeywords(const QStringList &kw);
+
+    // searchTarget
+    SearchTarget searchTarget() const;
+    void setSearchTarget(SearchTarget target);
+
+    // consumedSpans
+    const QList<MatchSpan> &consumedSpans() const;
+    QList<MatchSpan> &consumedSpans();
+    void setConsumedSpans(const QList<MatchSpan> &spans);
+
+private:
+    QSharedDataPointer<ParsedIntentPrivate> d;
 };
 
 DFM_SEARCH_END_NS

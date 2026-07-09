@@ -20,30 +20,61 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
     SemanticSearchPlan plan;
 
     // Pass location info through to plan (searcher handles per-directory options)
-    plan.searchDirectories = intent.searchDirectories;
-    plan.includeHidden = intent.includeHidden;
+    plan.searchDirectories = intent.searchDirectories();
+    plan.includeHidden = intent.includeHidden() || intent.hiddenOnly();
+    plan.hiddenOnly = intent.hiddenOnly();
+    plan.recentOnly = intent.recentOnly();
+
+    // When hiddenOnly is true, force filename-only search (no content/OCR)
+    const SearchTarget effectiveTarget = intent.hiddenOnly()
+            ? SearchTarget::FileNameOnly
+            : intent.searchTarget();
+
+    // ── Recently-used files: route to RecentSearchEngine (DBus data source) ──
+    // 最近使用记录不在 lucene++ 索引中，因此当 recentOnly 为 true 时，
+    // 抑制所有 index-based 引擎，仅启动 Recent 引擎。
+    if (plan.recentOnly) {
+        plan.recentOptions = buildBaseOptions(intent.timeConstraint(), intent.sizeConstraint());
+        // Recent 引擎不依赖 SearchMethod::Indexed，但保留 options 一致性
+        plan.recentOptions->setSearchMethod(SearchMethod::Realtime);
+
+        FileNameOptionsAPI recentApi(*plan.recentOptions);
+        if (!intent.fileExtensions().isEmpty()) {
+            recentApi.setFileExtensions(intent.fileExtensions());
+        }
+
+        if (intent.keywords().size() == 1) {
+            plan.recentQuery = SearchFactory::createQuery(intent.keywords().first());
+        } else if (intent.keywords().size() > 1) {
+            plan.recentQuery = SearchFactory::createQuery(intent.keywords(), SearchQuery::Type::Boolean);
+        } else {
+            plan.recentQuery = SearchFactory::createQuery(QStringLiteral(""));
+        }
+
+        return plan;   // recentOnly 独占搜索路径，不启动其他引擎
+    }
 
     // Determine time field strategy
-    if (intent.timeConstraint.isValid() && intent.timeConstraint.timeField == TimeField::Unspecified) {
+    if (intent.timeConstraint().isValid() && intent.timeConstraint().timeField() == TimeField::Unspecified) {
         // Time constraint exists but no action specified → search both birth and modify time
         plan.timeField = TimeField::Both;
-    } else if (intent.timeConstraint.timeField == TimeField::BirthTime) {
+    } else if (intent.timeConstraint().timeField() == TimeField::BirthTime) {
         plan.timeField = TimeField::BirthTime;
-    } else if (intent.timeConstraint.timeField == TimeField::ModifyTime) {
+    } else if (intent.timeConstraint().timeField() == TimeField::ModifyTime) {
         plan.timeField = TimeField::ModifyTime;
     } else {
         plan.timeField = TimeField::ModifyTime;
     }
 
     // Base options shared across all search paths
-    SearchOptions baseOpts = buildBaseOptions(intent.timeConstraint, intent.sizeConstraint);
+    SearchOptions baseOpts = buildBaseOptions(intent.timeConstraint(), intent.sizeConstraint());
     baseOpts.setSearchMethod(SearchMethod::Indexed);
 
     // Determine which search paths to enable based on user intent
-    const bool enableFileName = (intent.searchTarget == SearchTarget::All
-                              || intent.searchTarget == SearchTarget::FileNameOnly);
-    const bool enableContent = (intent.searchTarget == SearchTarget::All
-                             || intent.searchTarget == SearchTarget::ContentOnly);
+    const bool enableFileName = (effectiveTarget == SearchTarget::All
+                              || effectiveTarget == SearchTarget::FileNameOnly);
+    const bool enableContent = (effectiveTarget == SearchTarget::All
+                             || effectiveTarget == SearchTarget::ContentOnly);
     const bool enableOcr = enableContent;   // OCR is a content search path
 
     // --- File name search ---
@@ -51,17 +82,27 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
         SearchOptions opts = baseOpts;
         FileNameOptionsAPI fnameApi(opts);
 
-        if (!intent.fileExtensions.isEmpty()) {
-            fnameApi.setFileExtensions(intent.fileExtensions);
+        if (!intent.fileExtensions().isEmpty()) {
+            fnameApi.setFileExtensions(intent.fileExtensions());
         }
 
-        if (intent.keywords.size() == 1) {
-            plan.fileNameQuery = SearchFactory::createQuery(intent.keywords.first());
-        } else if (intent.keywords.size() > 1) {
-            plan.fileNameQuery = SearchFactory::createQuery(intent.keywords, SearchQuery::Type::Boolean);
+        if (intent.keywords().size() == 1) {
+            plan.fileNameQuery = SearchFactory::createQuery(intent.keywords().first());
+        } else if (intent.keywords().size() > 1) {
+            plan.fileNameQuery = SearchFactory::createQuery(intent.keywords(), SearchQuery::Type::Boolean);
         } else {
-            // No keywords: search all files (use wildcard to match everything)
-            plan.fileNameQuery = SearchFactory::createQuery("");
+            // 无关键字时的兜底 —— 必须区分是否有 fileExtensions，避免走错 indexedstrategy 分支：
+            // - 有 fileExtensions（"今天的图片"、"下载的pdf"）：保持空 Simple query，让
+            //   determineSearchType 走 Combined 分支，由 extQuery 作为主查询条件
+            // - 无 fileExtensions（"桌面的文件"、"下载的隐藏文件"、"下载的文件"）：用
+            //   wildcard "*" 匹配所有文件名，让 pathPrefixQuery / hiddenOnlyQuery 作为
+            //   真正的过滤器（Wildcard 分支不会被 Combined 误导走 NGram）
+            if (!intent.fileExtensions().isEmpty()) {
+                plan.fileNameQuery = SearchFactory::createQuery("");
+            } else {
+                plan.fileNameQuery = SearchFactory::createQuery(QStringLiteral("*"),
+                        SearchQuery::Type::Wildcard);
+            }
         }
 
         plan.fileNameOptions = opts;
@@ -69,7 +110,7 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
 
     // --- Content search (when keywords available and content target enabled) ---
     if (enableContent) {
-        const bool hasKeywords = !intent.keywords.isEmpty();
+        const bool hasKeywords = !intent.keywords().isEmpty();
         bool contentEnabled = hasKeywords;
 
         // Check if content index is available
@@ -81,7 +122,7 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
             // Check minimum keyword length
             const int minLen = Global::kMinContentSearchKeywordLength;
             bool hasValidKeyword = false;
-            for (const QString &kw : intent.keywords) {
+            for (const QString &kw : intent.keywords()) {
                 if (kw.length() >= minLen) {
                     hasValidKeyword = true;
                     break;
@@ -99,10 +140,15 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
             // Enable filename-content mixed AND search
             contentApi.setFilenameContentMixedAndSearchEnabled(true);
 
-            if (intent.keywords.size() == 1) {
-                plan.contentQuery = SearchFactory::createQuery(intent.keywords.first());
-            } else if (intent.keywords.size() > 1) {
-                plan.contentQuery = SearchFactory::createQuery(intent.keywords, SearchQuery::Type::Boolean);
+            // Pass file extension filter to content search
+            if (!intent.fileExtensions().isEmpty()) {
+                contentApi.setFileExtensions(intent.fileExtensions());
+            }
+
+            if (intent.keywords().size() == 1) {
+                plan.contentQuery = SearchFactory::createQuery(intent.keywords().first());
+            } else if (intent.keywords().size() > 1) {
+                plan.contentQuery = SearchFactory::createQuery(intent.keywords(), SearchQuery::Type::Boolean);
             }
 
             plan.contentOptions = opts;
@@ -111,7 +157,7 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
 
     // --- OCR search (when keywords available and content target enabled) ---
     if (enableOcr) {
-        const bool hasKeywords = !intent.keywords.isEmpty();
+        const bool hasKeywords = !intent.keywords().isEmpty();
         bool ocrEnabled = hasKeywords;
 
         if (ocrEnabled && !Global::isOcrTextIndexAvailable()) {
@@ -125,10 +171,15 @@ SemanticSearchPlan SemanticQueryBuilder::build(const ParsedIntent &intent)
             // Enable filename-OCR content mixed AND search
             ocrApi.setFilenameOcrContentMixedAndSearchEnabled(true);
 
-            if (intent.keywords.size() == 1) {
-                plan.ocrQuery = SearchFactory::createQuery(intent.keywords.first());
-            } else if (intent.keywords.size() > 1) {
-                plan.ocrQuery = SearchFactory::createQuery(intent.keywords, SearchQuery::Type::Boolean);
+            // Pass file extension filter to OCR search
+            if (!intent.fileExtensions().isEmpty()) {
+                ocrApi.setFileExtensions(intent.fileExtensions());
+            }
+
+            if (intent.keywords().size() == 1) {
+                plan.ocrQuery = SearchFactory::createQuery(intent.keywords().first());
+            } else if (intent.keywords().size() > 1) {
+                plan.ocrQuery = SearchFactory::createQuery(intent.keywords(), SearchQuery::Type::Boolean);
             }
 
             plan.ocrOptions = opts;
@@ -146,9 +197,9 @@ TimeRangeFilter SemanticQueryBuilder::buildTimeRangeFilter(const TimeConstraint 
         return filter;
     }
 
-    switch (tc.kind) {
+    switch (tc.kind()) {
     case TimeConstraintKind::Preset:
-        switch (tc.preset) {
+        switch (tc.preset()) {
         case TimePreset::Today:
             filter.setToday();
             break;
@@ -183,19 +234,19 @@ TimeRangeFilter SemanticQueryBuilder::buildTimeRangeFilter(const TimeConstraint 
         }
         break;
     case TimeConstraintKind::Relative:
-        filter.setRange(tc.customStart, tc.customEnd);
+        filter.setRange(tc.customStart(), tc.customEnd());
         break;
     case TimeConstraintKind::Custom:
-        filter.setRange(tc.customStart, tc.customEnd);
+        filter.setRange(tc.customStart(), tc.customEnd());
         break;
     case TimeConstraintKind::None:
         break;
     }
 
     // Set time field on the filter
-    if (tc.timeField == TimeField::BirthTime || tc.timeField == TimeField::ModifyTime) {
-        filter.setTimeField(tc.timeField);
-    } else if (tc.timeField == TimeField::Unspecified || tc.timeField == TimeField::Both) {
+    if (tc.timeField() == TimeField::BirthTime || tc.timeField() == TimeField::ModifyTime) {
+        filter.setTimeField(tc.timeField());
+    } else if (tc.timeField() == TimeField::Unspecified || tc.timeField() == TimeField::Both) {
         // No specific time field or both requested → search both birth and modify time
         filter.setTimeField(TimeField::Both);
     }
@@ -209,10 +260,10 @@ SizeRangeFilter SemanticQueryBuilder::buildSizeRangeFilter(const SizeConstraint 
     if (!sc.isValid()) {
         return filter;
     }
-    filter.setMin(sc.minSize);
-    filter.setMax(sc.maxSize);
-    filter.setIncludeLower(sc.includeLower);
-    filter.setIncludeUpper(sc.includeUpper);
+    filter.setMin(sc.minSize());
+    filter.setMax(sc.maxSize());
+    filter.setIncludeLower(sc.includeLower());
+    filter.setIncludeUpper(sc.includeUpper());
     return filter;
 }
 

@@ -18,12 +18,42 @@
                 },
                 {
                     "id": "action_modify",
-                    "pattern": "修改过的|编辑过的|改过的|写过的|更新的",
+                    "pattern": "修改过的|编辑过的|修改的|改过的|写过的|更新的",
                     "description": "Action: modified files (ModifyTime)",
                     "enabled": true,
                     "priority": 200,
                     "metadata": {
                         "time_field": "modify"
+                    }
+                },
+                {
+                    "id": "action_hidden_file",
+                    "pattern": "隐藏文件|隐藏的|藏起来的|看不到的",
+                    "description": "Action: search hidden files only",
+                    "enabled": true,
+                    "priority": 190,
+                    "metadata": {
+                        "hidden_only": true
+                    }
+                },
+                {
+                    "id": "action_im_receive",
+                    "pattern": "发给我的|接收的|别人传的|传给我的|别人发的|别人给的",
+                    "description": "Action: IM received files — maps to all IM received-file directories",
+                    "enabled": true,
+                    "priority": 170,
+                    "metadata": {
+                        "im_category": "received"
+                    }
+                },
+                {
+                    "id": "action_recent",
+                    "pattern": "打开的|打开过的|看过的|浏览过的|读过的|点开过的",
+                    "description": "Action: recently used files — sourced from RecentManager DBus (XDG recent records)",
+                    "enabled": true,
+                    "priority": 180,
+                    "metadata": {
+                        "recent": true
                     }
                 }
             ]
