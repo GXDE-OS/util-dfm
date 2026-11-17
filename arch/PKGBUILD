@@ -1,19 +1,20 @@
 # Maintainer: CharOfString <root@charofstring.cc>
-pkgname=util-dfm-git
+pkgname=util-dfm
 pkgver=1.3.71
 pkgrel=1
 pkgdesc='Utility libraries of the GXDE/deepin file manager (dfm6-io, -mount, -burn, -search)'
 arch=('x86_64' 'aarch64')
 url="https://github.com/GXDE-OS/util-dfm"
 license=('GPL-3.0-or-later' 'MIT' 'ClArtistic')
-depends=('dtk6core-git' 'qt6-base' 'glib2' 'glibmm' 'udisks2' 'libisoburn' 'libmediainfo' 'libsecret'
+depends=('gxde-dtk6core' 'qt6-base' 'glib2' 'glibmm' 'udisks2' 'libisoburn' 'libmediainfo' 'libsecret'
          'lucene++' 'openssl' 'util-linux-libs' 'libgcc' 'libstdc++' 'glibc')
 makedepends=('git' 'cmake' 'ninja' 'boost' 'qt6-tools')
 # Debian 拆成各库及其 -dev 包，这里没有文件冲突，按 Arch 惯例合并
 # Debian splits it into one package per library plus -dev packages; nothing
 # collides here, so it is a single package as usual on Arch.
-provides=('util-dfm' 'deepin-util-dfm')
-conflicts=('util-dfm' 'deepin-util-dfm')
+provides=('deepin-util-dfm' "util-dfm-git=$pkgver")
+conflicts=('deepin-util-dfm' 'util-dfm-git')
+replaces=('util-dfm-git')
 source=()
 sha512sums=()
 
